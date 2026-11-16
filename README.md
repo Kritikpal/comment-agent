@@ -17,6 +17,7 @@ npm run test:db      # repository tests against TEST_DATABASE_URL
 
 | Variable | Example | Used for |
 |---|---|---|
+| `ACCESS_CODE` | any secret string | Required. Code entered on `/login` before the dashboard and API open. Without it nobody can sign in. |
 | `GOOGLE_API_KEY` | `AIza…` | YouTube Data API v3. Required to add or refetch videos. |
 | `DATABASE_URL` | Supabase transaction pooler (`…pooler.supabase.com:6543/postgres?pgbouncer=true`) or local `postgres://postgres:<password>@localhost:5432/comment_agent` | App database. |
 | `DIRECT_URL` | Supabase session pooler (`…pooler.supabase.com:5432/postgres`) | Migrations (`npm run db:migrate` / `db:deploy`). Omit for a local database. |
