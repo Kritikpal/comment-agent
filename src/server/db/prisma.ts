@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
 import { PrismaClient } from "../../generated/prisma/client.ts"
@@ -16,18 +17,33 @@ function isTagged(value: CachedClient | PrismaClient | undefined): value is Cach
   return typeof value === "object" && value !== null && "clientClass" in value
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"])
+
+/**
+ * Local databases connect without TLS. Remote ones (e.g. Supabase) always use TLS: verified against
+ * DATABASE_CA_CERT (a PEM file path, e.g. Supabase's CA from the dashboard) when set, otherwise
+ * encrypted without verifying the server certificate.
+ */
+export function sslFor(connectionString: string): pg.PoolConfig["ssl"] {
+  const host = new URL(connectionString).hostname.replace(/^\[|\]$/g, "")
+  if (LOCAL_HOSTS.has(host)) return undefined
+  const caPath = process.env.DATABASE_CA_CERT
+  return caPath ? { ca: readFileSync(caPath, "utf8"), rejectUnauthorized: true } : { rejectUnauthorized: false }
+}
+
 function createClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) throw new Error("DATABASE_URL is not set")
   const pool = new pg.Pool({
     connectionString,
+    ssl: sslFor(connectionString),
     max: 5,
-    connectionTimeoutMillis: 3_000,
+    connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
-    // A stalled database must fail fast instead of hanging requests.
-    statement_timeout: 5_000,
-    query_timeout: 5_000,
-    idle_in_transaction_session_timeout: 10_000,
+    // Client-side timeout: a stalled database fails fast instead of hanging requests. Server-side
+    // statement/idle timeouts are left out: they're sent as startup parameters, which
+    // transaction-mode poolers (Supabase on port 6543, PgBouncer) can reject.
+    query_timeout: 10_000,
   })
   // Without a listener, an idle client dropped by Postgres is an uncaught error that kills the server.
   pool.on("error", (error) => console.error("[pg] idle client error", error.message))

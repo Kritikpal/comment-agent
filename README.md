@@ -18,7 +18,9 @@ npm run test:db      # repository tests against TEST_DATABASE_URL
 | Variable | Example | Used for |
 |---|---|---|
 | `GOOGLE_API_KEY` | `AIza…` | YouTube Data API v3. Required to add or refetch videos. |
-| `DATABASE_URL` | `postgres://postgres:<password>@localhost:5432/comment_agent` | App database. |
+| `DATABASE_URL` | Supabase transaction pooler (`…pooler.supabase.com:6543/postgres?pgbouncer=true`) or local `postgres://postgres:<password>@localhost:5432/comment_agent` | App database. |
+| `DIRECT_URL` | Supabase session pooler (`…pooler.supabase.com:5432/postgres`) | Migrations (`npm run db:migrate` / `db:deploy`). Omit for a local database. |
+| `DATABASE_CA_CERT` | `./supabase-ca.crt` | Optional. Supabase's CA certificate (Database settings → SSL) to verify the server; without it remote connections are encrypted but unverified. |
 | `GROQ_API_KEY` | `gsk_…` | LLM analysis (Groq through LangChain). |
 | `GROQ_MODEL` | `openai/gpt-oss-20b` | Optional. Changing it reclassifies every comment on the next run. |
 | `TEST_DATABASE_URL` | `postgres://postgres:<password>@localhost:5432/comment_agent_test` | `npm run test:db` only. Tests truncate its tables, and refuse to run unless the database name contains "test". |
