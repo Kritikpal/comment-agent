@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analyze pipeline · Data flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Skin mapped from dashboard/src/app/globals.css (OKLCH → hex). */
+    :root {
+      --paper: #faf9f5; --paper-2: #f2f0ea; --ink: #151423; --muted: #62626f;
+      --soft: #676874; --rule: rgba(21,20,35,0.12); --accent: #5833cd;
+      --accent-tint: rgba(88,51,205,0.08); --link: #006c9d;
+      --sans: 'Geist', system-ui, sans-serif; --serif: 'Instrument Serif', serif;
+      --mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; background: var(--paper); color: var(--ink); font-family: var(--sans); }
+    .frame { width: 100%; max-width: 1200px; min-width: 0; }
+    .eyebrow { margin-bottom: 0.5rem; color: var(--muted); font: 500 0.66rem var(--mono); letter-spacing: 0.18em; text-transform: uppercase; }
+    h1 { margin-bottom: 1.5rem; color: var(--ink); font: 400 clamp(1.5rem, 2.4vw + 0.75rem, 2rem)/1.15 var(--serif); letter-spacing: -0.02em; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    svg { display: block; width: 100%; min-width: 840px; }
+    .notes { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font: 400 0.8rem/1.6 var(--sans); max-width: 68ch; }
+    .notes code { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); }
+    .notes a { color: var(--link); }
+    .step-number, .step-label, .lane-label, .role-text, .legend-label { font-family: var(--mono); text-anchor: middle; }
+    .step-number { fill: var(--ink); font-size: 7px; font-weight: 600; }
+    .step-label { fill: var(--muted); font-size: 7px; font-weight: 500; letter-spacing: 0.12em; }
+    .lane-label { fill: var(--muted); font-size: 8px; font-weight: 500; letter-spacing: 0.14em; }
+    .role-text { fill: var(--ink); font-size: 6px; font-weight: 600; }
+    .node-title { fill: var(--ink); font: 600 9px var(--sans); text-anchor: middle; }
+    .node-sub { fill: var(--muted); font: 400 6.5px var(--mono); text-anchor: middle; }
+    .node-tool { fill: var(--soft); font: 400 6.5px var(--mono); text-anchor: middle; }
+    .focal-text { fill: var(--accent); }
+    .legend-label { fill: var(--muted); font-size: 7px; font-weight: 500; letter-spacing: 0.12em; text-anchor: end; }
+    .legend-text { fill: var(--muted); font: 400 7px var(--sans); }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="frame">
+    <p class="eyebrow">Data flow · Contract v1.1</p>
+    <h1>The analyze pipeline, from URL to report</h1>
+
+    <div class="diagram-container">
+    <svg viewBox="0 0 840 356" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pipeline-overview-title pipeline-overview-desc">
+      <title id="pipeline-overview-title">Analyze pipeline: Next.js route, YouTube, Groq</title>
+      <desc id="pipeline-overview-desc">The Next.js route validates the request, fetches comments from YouTube, prepares short IDs and batches, has Groq classify the batches through LangChain, merges and counts the results in code, has Groq write a summary, and returns the grounded v1.1 response.</desc>
+      <defs>
+        <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r="0.8" fill="rgba(21,20,35,0.10)"/></pattern>
+        <marker id="arr-muted" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#62626f"/></marker>
+        <marker id="arr-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#5833cd"/></marker>
+        <marker id="arr-link" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#006c9d"/></marker>
+      </defs>
+      <rect width="840" height="356" fill="#faf9f5"/>
+      <rect width="840" height="356" fill="url(#dots)"/>
+      <rect x="0" y="36" width="840" height="80" fill="rgba(21,20,35,0.018)"/>
+      <rect x="0" y="196" width="840" height="80" fill="rgba(21,20,35,0.018)"/>
+
+      <!-- Header and lane structure -->
+      <line x1="0" y1="36" x2="840" y2="36" stroke="rgba(21,20,35,0.12)" stroke-width="0.8"/>
+      <line x1="0" y1="116" x2="840" y2="116" stroke="rgba(21,20,35,0.12)" stroke-width="0.8"/>
+      <line x1="0" y1="196" x2="840" y2="196" stroke="rgba(21,20,35,0.12)" stroke-width="0.8"/>
+      <line x1="0" y1="276" x2="840" y2="276" stroke="rgba(21,20,35,0.12)" stroke-width="0.8"/>
+      <line x1="140" y1="36" x2="140" y2="276" stroke="rgba(21,20,35,0.12)" stroke-width="0.8"/>
+
+      <g aria-label="Pipeline steps">
+        <rect x="180" y="6" width="32" height="16" rx="8" fill="rgba(21,20,35,0.12)"/><text x="196" y="14" class="step-number">01</text><text x="196" y="29" class="step-label">INTAKE</text>
+        <rect x="292" y="6" width="32" height="16" rx="8" fill="rgba(21,20,35,0.12)"/><text x="308" y="14" class="step-number">02</text><text x="308" y="29" class="step-label">PREPARE</text>
+        <rect x="404" y="6" width="32" height="16" rx="8" fill="rgba(88,51,205,0.20)"/><text x="420" y="14" class="step-number focal-text">03</text><text x="420" y="29" class="step-label focal-text">CLASSIFY</text>
+        <rect x="516" y="6" width="32" height="16" rx="8" fill="rgba(21,20,35,0.12)"/><text x="532" y="14" class="step-number">04</text><text x="532" y="29" class="step-label">MERGE</text>
+        <rect x="628" y="6" width="32" height="16" rx="8" fill="rgba(21,20,35,0.12)"/><text x="644" y="14" class="step-number">05</text><text x="644" y="29" class="step-label">SUMMARIZE</text>
+        <rect x="740" y="6" width="32" height="16" rx="8" fill="rgba(21,20,35,0.12)"/><text x="756" y="14" class="step-number">06</text><text x="756" y="29" class="step-label">RESPOND</text>
+      </g>
+
+      <g aria-label="Runtime lanes">
+        <text x="70" y="72" class="lane-label">YOUTUBE</text><text x="70" y="84" class="lane-label">DATA API</text>
+        <text x="70" y="152" class="lane-label">NEXT.JS</text><text x="70" y="164" class="lane-label">ROUTE</text>
+        <text x="70" y="232" class="lane-label">GROQ VIA</text><text x="70" y="244" class="lane-label">LANGCHAIN</text>
+      </g>
+
+      <!-- Connectors first. Cross-lane paths use r=8 orthogonal elbows. -->
+      <path d="M196 124 V108" fill="none" stroke="#006c9d" marker-end="url(#arr-link)"/>
+      <path d="M246 76 H300 Q308 76 308 84 V124" fill="none" stroke="#62626f" marker-end="url(#arr-muted)"/>
+      <path d="M358 156 H412 Q420 156 420 164 V204" fill="none" stroke="#5833cd" stroke-width="1.2" marker-end="url(#arr-accent)"/>
+      <path d="M470 236 H524 Q532 236 532 228 V188" fill="none" stroke="#62626f" marker-end="url(#arr-muted)"/>
+      <path d="M582 156 H636 Q644 156 644 164 V204" fill="none" stroke="#006c9d" marker-end="url(#arr-link)"/>
+      <path d="M694 236 H748 Q756 236 756 228 V188" fill="none" stroke="#62626f" marker-end="url(#arr-muted)"/>
+      <rect x="428" y="174" width="48" height="12" rx="2" fill="#faf9f5"/>
+      <text x="452" y="183" fill="#5833cd" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">5 BATCHES</text>
+
+      <!-- YouTube: Fetch comments -->
+      <rect x="146" y="44" width="100" height="64" rx="6" fill="#faf9f5" stroke="rgba(21,20,35,0.25)"/>
+      <rect x="150" y="48" width="18" height="10" rx="3" fill="rgba(21,20,35,0.12)"/><text x="159" y="55" class="role-text">YT</text>
+      <text x="196" y="72" class="node-title">Fetch comments</text><text x="196" y="84" class="node-sub">commentThreads.list</text><text x="196" y="96" class="node-tool">relevance · top-level</text>
+
+      <!-- Route: Validate -->
+      <rect x="146" y="124" width="100" height="64" rx="6" fill="#faf9f5" stroke="rgba(21,20,35,0.25)"/>
+      <rect x="150" y="128" width="18" height="10" rx="3" fill="rgba(21,20,35,0.12)"/><text x="159" y="135" class="role-text">RTE</text>
+      <text x="196" y="152" class="node-title">Validate</text><text x="196" y="164" class="node-sub">zod · rate limit</text><text x="196" y="176" class="node-tool">POST /analyze</text>
+
+      <!-- Route: Prepare -->
+      <rect x="258" y="124" width="100" height="64" rx="6" fill="#faf9f5" stroke="rgba(21,20,35,0.25)"/>
+      <rect x="262" y="128" width="18" height="10" rx="3" fill="rgba(21,20,35,0.12)"/><text x="271" y="135" class="role-text">RTE</text>
+      <text x="308" y="152" class="node-title">Prepare</text><text x="308" y="164" class="node-sub">C001… · trim 1k</text><text x="308" y="176" class="node-tool">batches of 20</text>
+
+      <!-- Groq: Classify (focal) -->
+      <rect x="370" y="204" width="100" height="64" rx="6" fill="rgba(88,51,205,0.07)" stroke="#5833cd" stroke-width="1.2"/>
+      <rect x="374" y="208" width="18" height="10" rx="3" fill="rgba(88,51,205,0.20)"/><text x="383" y="215" class="role-text focal-text">LLM</text>
+      <text x="420" y="232" class="node-title">Classify</text><text x="420" y="244" class="node-sub">withStructuredOutput</text><text x="420" y="256" class="node-tool">3 parallel · retry 1</text>
+
+      <!-- Route: Merge -->
+      <rect x="482" y="124" width="100" height="64" rx="6" fill="#faf9f5" stroke="rgba(21,20,35,0.25)"/>
+      <rect x="486" y="128" width="18" height="10" rx="3" fill="rgba(21,20,35,0.12)"/><text x="495" y="135" class="role-text">RTE</text>
+      <text x="532" y="152" class="node-title">Merge &amp; count</text><text x="532" y="164" class="node-sub">drop unknown IDs</text><text x="532" y="176" class="node-tool">aggregate()</text>
+
+      <!-- Groq: Summarize -->
+      <rect x="594" y="204" width="100" height="64" rx="6" fill="#faf9f5" stroke="rgba(21,20,35,0.25)"/>
+      <rect x="598" y="208" width="18" height="10" rx="3" fill="rgba(21,20,35,0.12)"/><text x="607" y="215" class="role-text">LLM</text>
+      <text x="644" y="232" class="node-title">Summarize</text><text x="644" y="244" class="node-sub">top 5+5 aspects</text><text x="644" y="256" class="node-tool">→ aspects_used</text>
+
+      <!-- Route: Ground & respond -->
+      <rect x="706" y="124" width="100" height="64" rx="6" fill="#faf9f5" stroke="rgba(21,20,35,0.25)"/>
+      <rect x="710" y="128" width="18" height="10" rx="3" fill="rgba(21,20,35,0.12)"/><text x="719" y="135" class="role-text">RTE</text>
+      <text x="756" y="152" class="node-title">Ground &amp; respond</text><text x="756" y="164" class="node-sub">summary comment IDs</text><text x="756" y="176" class="node-tool">v1.1 JSON</text>
+
+      <!-- Legend: steps -->
+      <text x="164" y="293" class="legend-label">STEPS</text>
+      <rect x="180" y="284" width="24" height="12" rx="6" fill="rgba(21,20,35,0.12)"/><text x="192" y="292" class="step-number">01</text><text x="212" y="293" class="legend-text">Intake</text>
+      <rect x="284" y="284" width="24" height="12" rx="6" fill="rgba(21,20,35,0.12)"/><text x="296" y="292" class="step-number">02</text><text x="316" y="293" class="legend-text">Prepare</text>
+      <rect x="388" y="284" width="24" height="12" rx="6" fill="rgba(88,51,205,0.20)"/><text x="400" y="292" class="step-number focal-text">03</text><text x="420" y="293" class="legend-text">Classify</text>
+      <rect x="492" y="284" width="24" height="12" rx="6" fill="rgba(21,20,35,0.12)"/><text x="504" y="292" class="step-number">04</text><text x="524" y="293" class="legend-text">Merge</text>
+      <rect x="596" y="284" width="24" height="12" rx="6" fill="rgba(21,20,35,0.12)"/><text x="608" y="292" class="step-number">05</text><text x="628" y="293" class="legend-text">Summarize</text>
+      <rect x="700" y="284" width="24" height="12" rx="6" fill="rgba(21,20,35,0.12)"/><text x="712" y="292" class="step-number">06</text><text x="732" y="293" class="legend-text">Respond</text>
+
+      <!-- Legend: flow -->
+      <text x="164" y="315" class="legend-label">FLOW</text>
+      <line x1="180" y1="312" x2="204" y2="312" stroke="#62626f" marker-end="url(#arr-muted)"/><text x="212" y="315" class="legend-text">Handoff in code</text>
+      <line x1="324" y1="312" x2="348" y2="312" stroke="#5833cd" stroke-width="1.2" marker-end="url(#arr-accent)"/><text x="356" y="315" class="legend-text">Focal: batches to the classifier</text>
+      <line x1="508" y1="312" x2="532" y2="312" stroke="#006c9d" marker-end="url(#arr-link)"/><text x="540" y="315" class="legend-text">External API call</text>
+
+      <text x="164" y="337" class="legend-label">LANES</text>
+      <text x="180" y="337" class="legend-text">Where each step runs: the route owns all state; YouTube and Groq only answer calls.</text>
+    </svg>
+    </div>
+
+    <div class="notes">
+      <p>Two LLM call types, everything else is code. A batch that fails schema validation twice is dropped, so
+      <code>total_analyzed</code> can be lower than <code>total_fetched</code>. Analytics and
+      <code>ai_summary_comment_ids</code> are computed after the drop. Error exits:
+      <a href="pipeline-errors.html">pipeline-errors.html</a>. Contract: <code>docs/api-contract-v1.1.md</code>.</p>
+    </div>
+  </main>
+</body>
+</html>
