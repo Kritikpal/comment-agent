@@ -1,5 +1,8 @@
 # Product Feedback Intelligence — API Contract v1.1
 
+> **Superseded.** `POST /api/v1/videos/analyze` was removed in [v1.3](api-contract-v1.3.md). The classification enums and report fields below still apply; analysis now runs per stored video.
+
+
 Status: **agreed, not implemented**. Supersedes "Prototype API & LLM Schemas (LOCKED v1.0)".
 Backend: Next.js route handlers (Node runtime) + LangChain JS + Groq. No database in this version.
 

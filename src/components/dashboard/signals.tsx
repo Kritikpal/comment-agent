@@ -7,24 +7,24 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { countTones, percent } from "@/lib/analytics"
-import { TONES, type AnalyzeResponse } from "@/lib/types"
+import { percent } from "@/lib/analytics"
+import { TONES, type AnalysisReport } from "@/lib/types"
 import { PURCHASE_LABEL, TONE_LABEL, type EvidenceRequest } from "./meta"
 
 type Props = {
-  response: AnalyzeResponse
+  report: AnalysisReport
   onEvidence: (evidence: EvidenceRequest) => void
 }
 
-export function Signals({ response, onEvidence }: Props) {
+export function Signals({ report, onEvidence }: Props) {
   return (
     <section
       aria-label="Customer signals"
       className="grid gap-14 lg:grid-cols-12 lg:gap-0 lg:divide-x"
     >
-      <ToneBreakdown response={response} />
-      <PurchaseInterest response={response} />
-      <CustomerQuestions response={response} onEvidence={onEvidence} />
+      <ToneBreakdown report={report} />
+      <PurchaseInterest report={report} />
+      <CustomerQuestions report={report} onEvidence={onEvidence} />
     </section>
   )
 }
@@ -42,8 +42,8 @@ function SectionTitle({ id, children, note }: { id: string; children: string; no
 
 const toneConfig = { count: { label: "Comments", color: "var(--chart-1)" } } satisfies ChartConfig
 
-function ToneBreakdown({ response }: { response: AnalyzeResponse }) {
-  const counts = countTones(response.results)
+function ToneBreakdown({ report }: { report: AnalysisReport }) {
+  const counts = report.tone
   const data = TONES.map((tone) => ({ tone: TONE_LABEL[tone], count: counts[tone] })).sort(
     (a, b) => b.count - a.count
   )
@@ -90,9 +90,9 @@ const purchaseConfig = {
   none: { label: PURCHASE_LABEL.none, color: "var(--muted)" },
 } satisfies ChartConfig
 
-function PurchaseInterest({ response }: { response: AnalyzeResponse }) {
-  const { considering, ready_to_buy } = response.analytics.purchase_interest
-  const total = response.total_analyzed
+function PurchaseInterest({ report }: { report: AnalysisReport }) {
+  const { considering, ready_to_buy } = report.purchase_interest
+  const total = report.total_analyzed
   const none = Math.max(total - considering - ready_to_buy, 0)
   const data = [
     { key: "ready_to_buy", value: ready_to_buy, fill: "var(--color-ready_to_buy)" },
@@ -130,7 +130,7 @@ function PurchaseInterest({ response }: { response: AnalyzeResponse }) {
       </ChartContainer>
       <dl className="flex flex-col gap-2.5 text-sm">
         {(["ready_to_buy", "considering"] as const).map((key) => {
-          const value = response.analytics.purchase_interest[key]
+          const value = report.purchase_interest[key]
           return (
             <div key={key} className="flex items-center justify-between gap-3">
               <dt className="flex items-center gap-2">
@@ -149,36 +149,40 @@ function PurchaseInterest({ response }: { response: AnalyzeResponse }) {
   )
 }
 
-function CustomerQuestions({ response, onEvidence }: Props) {
-  const questions = response.analytics.customer_questions
+const QUESTIONS_SHOWN = 12
+
+function CustomerQuestions({ report, onEvidence }: Props) {
+  const questions = report.customer_questions
 
   return (
     <div className="flex flex-col gap-6 lg:col-span-4 lg:pl-10">
-      <SectionTitle id="questions-heading" note={`${questions.length} asked in the comments.`}>
+      <SectionTitle
+        id="questions-heading"
+        note={`${questions.length}${questions.length >= 50 ? "+" : ""} distinct questions${questions.length > QUESTIONS_SHOWN ? `, top ${QUESTIONS_SHOWN} shown` : ""}.`}
+      >
         Customer questions
       </SectionTitle>
       {questions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No questions in the analyzed comments.</p>
       ) : (
         <ul aria-labelledby="questions-heading" className="flex flex-col divide-y">
-          {questions.map((q) => (
+          {questions.slice(0, QUESTIONS_SHOWN).map((q) => (
             <li key={q.question} className="flex items-start justify-between gap-4 py-3 first:pt-0">
               <p className="text-[0.95rem] leading-snug text-pretty">{q.question}</p>
-              <div className="flex shrink-0 gap-1">
-                {q.comment_ids.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() =>
-                      onEvidence({ title: q.question, description: "Asked in this comment.", commentIds: [id] })
-                    }
-                    className="rounded-md bg-secondary px-1.5 py-0.5 font-mono text-xs text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                    aria-label={`View comment ${id}`}
-                  >
-                    {id}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  onEvidence({
+                    title: q.question,
+                    description: `Asked in ${q.comment_ids.length} comment${q.comment_ids.length === 1 ? "" : "s"}.`,
+                    commentIds: q.comment_ids,
+                  })
+                }
+                className="shrink-0 rounded-md bg-secondary px-2 py-0.5 text-xs whitespace-nowrap text-secondary-foreground tabular-nums transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                aria-label={`View the ${q.comment_ids.length} comments asking this`}
+              >
+                {q.comment_ids.length} ×
+              </button>
             </li>
           ))}
         </ul>

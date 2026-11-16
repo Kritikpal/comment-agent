@@ -1,38 +1,37 @@
 import { ArrowUpRight, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { percent } from "@/lib/analytics"
-import type { AnalyzeRequest, AnalyzeResponse } from "@/lib/types"
+import { formatDateTime } from "@/lib/format"
+import type { AnalysisReport } from "@/lib/types"
 import { SENTIMENT_META, SENTIMENT_ORDER, type EvidenceRequest } from "./meta"
 
 type Props = {
-  request: AnalyzeRequest
-  response: AnalyzeResponse
+  product: { name: string; category: string | null }
+  youtubeVideoId: string
+  report: AnalysisReport
+  /** When the report was produced. */
+  analyzedAt: string | null
   onEvidence: (evidence: EvidenceRequest) => void
 }
 
-function summaryEvidenceIds(response: AnalyzeResponse): string[] {
-  const { top_positive_features, top_complaints } = response.analytics
-  const ids = [...top_positive_features.slice(0, 2), ...top_complaints.slice(0, 2)].flatMap(
-    (a) => a.comment_ids
-  )
-  return [...new Set(ids)].sort()
-}
-
-export function ReportHeader({ request, response, onEvidence }: Props) {
-  const { total_analyzed, video_id, analytics } = response
-  const evidenceIds = summaryEvidenceIds(response)
+export function ReportHeader({ product, youtubeVideoId, report, analyzedAt, onEvidence }: Props) {
+  const { total_analyzed } = report
+  const analytics = report
+  const video_id = youtubeVideoId
+  const evidenceIds = analytics.ai_summary_comment_ids
 
   return (
     <section aria-labelledby="product-heading" className="grid gap-10 lg:grid-cols-12 lg:gap-12">
       <div className="flex flex-col justify-end gap-5 lg:col-span-7">
         <p className="text-sm text-muted-foreground">
-          Comment analysis{request.product.category ? ` · ${request.product.category}` : ""}
+          Comment analysis{product.category ? ` · ${product.category}` : ""}
+          {analyzedAt && ` · ${formatDateTime(analyzedAt)}`}
         </p>
         <h1
           id="product-heading"
           className="font-display text-6xl leading-[0.92] tracking-[-0.02em] text-balance sm:text-7xl xl:text-8xl"
         >
-          {request.product.name}
+          {product.name}
         </h1>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
           <a
@@ -67,7 +66,7 @@ export function ReportHeader({ request, response, onEvidence }: Props) {
               onClick={() =>
                 onEvidence({
                   title: "AI summary evidence",
-                  description: "Comments behind the top praised features and complaints.",
+                  description: "Comments behind the aspects the summary mentions.",
                   commentIds: evidenceIds,
                 })
               }
@@ -81,10 +80,11 @@ export function ReportHeader({ request, response, onEvidence }: Props) {
   )
 }
 
-type BandProps = { response: AnalyzeResponse }
+type BandProps = { report: AnalysisReport }
 
-export function SentimentBand({ response }: BandProps) {
-  const { total_analyzed, analytics } = response
+export function SentimentBand({ report }: BandProps) {
+  const { total_analyzed } = report
+  const analytics = report
   const interested = analytics.purchase_interest.considering + analytics.purchase_interest.ready_to_buy
 
   return (

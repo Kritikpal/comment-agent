@@ -1,0 +1,163 @@
+// Prisma 7: the connection URL lives in prisma.config.ts; the app connects through @prisma/adapter-pg.
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  // .ts imports so `node --test` (type stripping) can load the generated client directly.
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FetchStatus {
+  PENDING
+  FETCHING
+  READY
+  FAILED
+}
+
+model Video {
+  id               String      @id @default(uuid()) @db.Uuid
+  youtubeVideoId   String      @unique @map("youtube_video_id")
+  url              String
+  title            String?
+  channelTitle     String?     @map("channel_title")
+  thumbnailUrl     String?     @map("thumbnail_url")
+  productName      String      @map("product_name")
+  productCategory  String?     @map("product_category")
+  notes            String?
+  commentLimit     Int         @default(100) @map("comment_limit")
+  /// Stored so the video list never counts comments per row.
+  commentCount     Int         @default(0) @map("comment_count")
+  fetchStatus      FetchStatus @default(PENDING) @map("fetch_status")
+  fetchStartedAt   DateTime?   @map("fetch_started_at")
+  lastFetchedAt    DateTime?   @map("last_fetched_at")
+  /// Every comment published after this instant (up to the last complete fetch) is stored.
+  /// Refetches stop here; it only advances when a fetch reaches it, so a gap can be filled later.
+  fetchedThrough   DateTime?   @map("fetched_through")
+  /// Set when the last fetch hit the per-fetch limit before reaching fetchedThrough.
+  lastFetchNote    String?     @map("last_fetch_note")
+  lastErrorCode    String?     @map("last_error_code")
+  lastErrorMessage String?     @map("last_error_message")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  comments         Comment[]
+  analyses         CommentAnalysis[]
+  analysisRuns     AnalysisRun[]
+
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@map("videos")
+}
+
+model Comment {
+  /// YouTube comment ID.
+  id               String    @id
+  videoId          String    @map("video_id") @db.Uuid
+  video            Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  text             String
+  authorName       String?   @map("author_name")
+  likeCount        Int       @default(0) @map("like_count")
+  replyCount       Int       @default(0) @map("reply_count")
+  publishedAt      DateTime  @map("published_at")
+  youtubeUpdatedAt DateTime? @map("youtube_updated_at")
+  fetchedAt        DateTime  @default(now()) @map("fetched_at")
+  analyses         CommentAnalysis[]
+
+  /// Matches the comment list's keyset cursor exactly: video, then newest first.
+  @@index([videoId, publishedAt(sort: Desc), id(sort: Desc)])
+  @@map("comments")
+}
+
+enum Sentiment {
+  positive
+  negative
+  neutral
+  mixed
+}
+
+enum Tone {
+  appreciative
+  excited
+  frustrated
+  critical
+  curious
+  sarcastic
+  neutral
+}
+
+enum Intent {
+  praise
+  complaint
+  question
+  suggestion
+  request
+  other
+}
+
+enum PurchaseIntent {
+  none
+  considering
+  ready_to_buy
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+}
+
+/// One classification of one comment by one analyzer version (prompt + model).
+/// A comment is reclassified only when the version changes or the comment is edited afterwards.
+model CommentAnalysis {
+  commentId       String           @map("comment_id")
+  analyzerVersion String           @map("analyzer_version")
+  /// Denormalized from the comment so per-video aggregation needs no join.
+  videoId         String           @map("video_id") @db.Uuid
+  sentiment       Sentiment
+  tone            Tone
+  intents         Intent[]
+  purchaseIntent  PurchaseIntent   @map("purchase_intent")
+  /// [{ aspect, sentiment, detail }]
+  feedback        Json
+  questions       String[]
+  model           String
+  analyzedAt      DateTime         @map("analyzed_at")
+  comment         Comment          @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  video           Video            @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, analyzerVersion])
+  /// Serves the per-video aggregation and the sentiment filter on the evidence table.
+  @@index([videoId, analyzerVersion, sentiment])
+  @@map("comment_analyses")
+}
+
+/// One "Run analysis": progress while running, and the report snapshot once READY.
+model AnalysisRun {
+  id                 String    @id @default(uuid()) @db.Uuid
+  videoId            String    @map("video_id") @db.Uuid
+  status             RunStatus @default(PENDING)
+  analyzerVersion    String    @map("analyzer_version")
+  model              String
+  commentsTotal      Int       @default(0) @map("comments_total")
+  commentsClassified Int       @default(0) @map("comments_classified")
+  commentsFailed     Int       @default(0) @map("comments_failed")
+  tokensIn           Int       @default(0) @map("tokens_in")
+  tokensOut          Int       @default(0) @map("tokens_out")
+  /// Report snapshot (analytics) written when the run finishes.
+  report             Json?
+  errorCode          String?   @map("error_code")
+  errorMessage       String?   @map("error_message")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  /// Bumped on every progress write; a RUNNING run that stops updating is treated as abandoned.
+  heartbeatAt        DateTime  @default(now()) @map("heartbeat_at")
+  finishedAt         DateTime? @map("finished_at")
+  video              Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  /// Latest run per video, and the latest READY report.
+  @@index([videoId, createdAt(sort: Desc)])
+  @@map("analysis_runs")
+}
